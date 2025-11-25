@@ -6,7 +6,7 @@ import { OfflineFetcher } from "@meshsdk/provider";
 
 import { InMemoryBip32 } from "../../src";
 import { AddressType } from "../../src/cardano/address/cardano-address";
-import { BaseCardanoWallet } from "../../src/cardano/wallet/mesh/cardano-base-wallet";
+import { MeshWallet } from "../../src/cardano/wallet/mesh/mesh-wallet";
 import { BaseSigner } from "../../src/signer/base-signer";
 
 describe("CardanoBaseWallet", () => {
@@ -121,7 +121,7 @@ describe("CardanoBaseWallet", () => {
   ]);
 
   it("should create correct wallet from mnemonic", async () => {
-    const wallet = await BaseCardanoWallet.fromMnemonic({
+    const wallet = await MeshWallet.fromMnemonic({
       mnemonic: "solution,".repeat(24).split(",").slice(0, 24),
       networkId: 0,
       walletAddressType: AddressType.Base,
@@ -137,7 +137,7 @@ describe("CardanoBaseWallet", () => {
       "solution,".repeat(24).split(",").slice(0, 24)
     );
 
-    const wallet = await BaseCardanoWallet.create({
+    const wallet = await MeshWallet.create({
       addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: 0,
       walletAddressType: AddressType.Base,
@@ -153,7 +153,7 @@ describe("CardanoBaseWallet", () => {
       "addr_test1qpvx0sacufuypa2k4sngk7q40zc5c4npl337uusdh64kv0uafhxhu32dys6pvn6wlw8dav6cmp4pmtv7cc3yel9uu0nq93swx9"
     );
 
-    const wallet2 = await BaseCardanoWallet.create({
+    const wallet2 = await MeshWallet.create({
       addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: 0,
       walletAddressType: AddressType.Enterprise,
@@ -178,11 +178,7 @@ describe("CardanoBaseWallet", () => {
       "b810d6398db44f380a9ab279f63950c4b95432f44fafb5a6f026afe23bbe92416a05410d56bb31b9e3631ae60ecabaec2b0355bfc8c830da138952ea9454de50"
     );
 
-    const bip32 = await InMemoryBip32.fromMnemonic(
-      "solution,".repeat(24).split(",").slice(0, 24)
-    );
-
-    const wallet = await BaseCardanoWallet.create({
+    const wallet = await MeshWallet.create({
       networkId: 0,
       walletAddressType: AddressType.Base,
       addressSource: {
@@ -212,15 +208,12 @@ describe("CardanoBaseWallet", () => {
       "d4ffb1e83d44b66849b4f16183cbf2ba1358c491cfeb39f0b66b5f811a88f182"
     );
 
-    const wallet2 = await BaseCardanoWallet.create({
+    const wallet2 = await MeshWallet.fromCredentialSources({
       networkId: 0,
       walletAddressType: AddressType.Enterprise,
-      addressSource: {
-        type: "credentials",
-        paymentCredential: {
-          type: "signer",
-          signer: paymentSigner2,
-        },
+      paymentCredentialSource: {
+        type: "signer",
+        signer: paymentSigner2,
       },
     });
 
@@ -240,7 +233,7 @@ describe("CardanoBaseWallet", () => {
   });
 
   it("should sign with correct witness", async () => {
-    const wallet = await BaseCardanoWallet.fromMnemonic({
+    const wallet = await MeshWallet.fromMnemonic({
       mnemonic: "solution,".repeat(24).split(",").slice(0, 24),
       networkId: 0,
       walletAddressType: AddressType.Base,
@@ -269,7 +262,7 @@ describe("CardanoBaseWallet", () => {
   });
 
   it("should fetch utxos from multiple addresses", async () => {
-    const wallet = await BaseCardanoWallet.fromMnemonic({
+    const wallet = await MeshWallet.fromMnemonic({
       mnemonic: "solution,".repeat(24).split(",").slice(0, 24),
       networkId: 0,
       walletAddressType: AddressType.Base,
@@ -280,7 +273,7 @@ describe("CardanoBaseWallet", () => {
   });
 
   it("should fetch correct balance", async () => {
-    const wallet = await BaseCardanoWallet.fromMnemonic({
+    const wallet = await MeshWallet.fromMnemonic({
       mnemonic: "solution,".repeat(24).split(",").slice(0, 24),
       networkId: 0,
       walletAddressType: AddressType.Base,
@@ -303,7 +296,7 @@ describe("CardanoBaseWallet", () => {
   });
 
   it("should fetch correct collateral", async () => {
-    const wallet = await BaseCardanoWallet.fromMnemonic({
+    const wallet = await MeshWallet.fromMnemonic({
       mnemonic: "solution,".repeat(24).split(",").slice(0, 24),
       networkId: 0,
       walletAddressType: AddressType.Base,
@@ -319,7 +312,7 @@ describe("CardanoBaseWallet", () => {
   });
 
   it("should sign data correctly", async () => {
-    const wallet = await BaseCardanoWallet.fromMnemonic({
+    const wallet = await MeshWallet.fromMnemonic({
       mnemonic: "solution,".repeat(24).split(",").slice(0, 24),
       networkId: 0,
       walletAddressType: AddressType.Base,

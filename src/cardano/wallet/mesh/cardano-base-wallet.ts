@@ -4,12 +4,12 @@ import { DataSignature, IFetcher, ISubmitter, UTxO } from "@meshsdk/common";
 
 import { InMemoryBip32 } from "../../../bip32/in-memory-bip32";
 import { ICardanoWallet } from "../../../interfaces/cardano-wallet";
-import { ISecretManager } from "../../../interfaces/secret-manager";
 import { toTxUnspentOutput } from "../../../utils/converter";
 import { mergeValue } from "../../../utils/value";
 import { AddressType } from "../../address/cardano-address";
 import {
   AddressManager,
+  AddressSource,
   CredentialSource,
 } from "../../address/single-address-manager";
 import { CardanoSigner } from "../../signer/cardano-signer";
@@ -24,28 +24,13 @@ export type WalletAddressType = AddressType.Base | AddressType.Enterprise;
  */
 export interface BaseCardanoWalletConfig {
   /**
-   * The secret manager instance that provides access to private keys and signing capabilities.
+   * The source for wallet's signing keys and addresses. Could either be a secret manager or explicit credentials.
    */
-  secretManager: ISecretManager;
+  addressSource: AddressSource;
   /**
    * The network ID (0 for testnet, 1 for mainnet).
    */
   networkId: number;
-  /**
-   * Optional custom credential source for the payment credential.
-   * If not provided, the wallet will derive payment credentials using default derivation paths.
-   */
-  customPaymentCredentialSource?: CredentialSource;
-  /**
-   * Optional custom credential source for the stake credential.
-   * If not provided, the wallet will derive stake credentials using default derivation paths.
-   */
-  customStakeCredentialSource?: CredentialSource;
-  /**
-   * Optional custom credential source for the DRep credential.
-   * If not provided, the wallet will derive DRep credentials using default derivation paths.
-   */
-  customDrepCredentialSource?: CredentialSource;
   /**
    * The type of wallet address to use (Base or Enterprise).
    * Base addresses include staking capabilities, while Enterprise addresses do not.
@@ -87,11 +72,8 @@ export class BaseCardanoWallet implements ICardanoWallet {
     config: BaseCardanoWalletConfig
   ): Promise<BaseCardanoWallet> {
     const addressManager = await AddressManager.create({
-      secretManager: config.secretManager,
+      addressSource: config.addressSource,
       networkId: config.networkId,
-      customPaymentCredentialSource: config.customPaymentCredentialSource,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
     });
 
     return new BaseCardanoWallet(
@@ -109,17 +91,14 @@ export class BaseCardanoWallet implements ICardanoWallet {
    * @returns {Promise<BaseCardanoWallet>} A promise that resolves to a BaseCardanoWallet instance
    */
   static async fromBip32Root(
-    config: Omit<BaseCardanoWalletConfig, "secretManager"> & {
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
       bech32: string;
     }
   ): Promise<BaseCardanoWallet> {
     const bip32 = InMemoryBip32.fromBech32(config.bech32);
     return BaseCardanoWallet.create({
-      secretManager: bip32,
+      addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: config.networkId,
-      customPaymentCredentialSource: config.customPaymentCredentialSource,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
       walletAddressType: config.walletAddressType,
       fetcher: config.fetcher,
       submitter: config.submitter,
@@ -132,17 +111,14 @@ export class BaseCardanoWallet implements ICardanoWallet {
    * @returns {Promise<BaseCardanoWallet>} A promise that resolves to a BaseCardanoWallet instance
    */
   static async fromBip32RootHex(
-    config: Omit<BaseCardanoWalletConfig, "secretManager"> & {
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
       hex: string;
     }
   ): Promise<BaseCardanoWallet> {
     const bip32 = InMemoryBip32.fromKeyHex(config.hex);
     return BaseCardanoWallet.create({
-      secretManager: bip32,
+      addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: config.networkId,
-      customPaymentCredentialSource: config.customPaymentCredentialSource,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
       walletAddressType: config.walletAddressType,
       fetcher: config.fetcher,
       submitter: config.submitter,
@@ -155,7 +131,7 @@ export class BaseCardanoWallet implements ICardanoWallet {
    * @returns {Promise<BaseCardanoWallet>} A promise that resolves to a BaseCardanoWallet instance
    */
   static async fromMnemonic(
-    config: Omit<BaseCardanoWalletConfig, "secretManager"> & {
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
       mnemonic: string[];
       password?: string;
     }
@@ -165,11 +141,29 @@ export class BaseCardanoWallet implements ICardanoWallet {
       config.password
     );
     return BaseCardanoWallet.create({
-      secretManager: bip32,
+      addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: config.networkId,
-      customPaymentCredentialSource: config.customPaymentCredentialSource,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
+      walletAddressType: config.walletAddressType,
+      fetcher: config.fetcher,
+      submitter: config.submitter,
+    });
+  }
+
+  static async fromCredentialSources(
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
+      paymentCredentialSource: CredentialSource;
+      stakeCredentialSource?: CredentialSource;
+      drepCredentialSource?: CredentialSource;
+    }
+  ): Promise<BaseCardanoWallet> {
+    return BaseCardanoWallet.create({
+      addressSource: {
+        type: "credentials",
+        paymentCredential: config.paymentCredentialSource,
+        stakeCredential: config.stakeCredentialSource,
+        drepCredential: config.drepCredentialSource,
+      },
+      networkId: config.networkId,
       walletAddressType: config.walletAddressType,
       fetcher: config.fetcher,
       submitter: config.submitter,

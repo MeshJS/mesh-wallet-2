@@ -1,10 +1,13 @@
 import { Cardano, Serialization } from "@cardano-sdk/core";
 import { HexBlob } from "@cardano-sdk/util";
 
-import { Asset, IFetcher, ISubmitter, UTxO } from "@meshsdk/common";
+import { Asset, UTxO } from "@meshsdk/common";
 
 import { InMemoryBip32 } from "../../../bip32/in-memory-bip32";
-import { AddressManager } from "../../address/single-address-manager";
+import {
+  AddressManager,
+  CredentialSource,
+} from "../../address/single-address-manager";
 import {
   BaseCardanoWallet,
   BaseCardanoWalletConfig,
@@ -17,10 +20,8 @@ import {
 export class MeshWallet extends BaseCardanoWallet {
   static async create(config: BaseCardanoWalletConfig): Promise<MeshWallet> {
     const addressManager = await AddressManager.create({
-      secretManager: config.secretManager,
+      addressSource: config.addressSource,
       networkId: config.networkId,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
     });
 
     return new MeshWallet(
@@ -28,25 +29,23 @@ export class MeshWallet extends BaseCardanoWallet {
       addressManager,
       config.walletAddressType,
       config.fetcher,
-      config.submitter,
+      config.submitter
     );
   }
 
   static async fromMnemonic(
-    config: Omit<BaseCardanoWalletConfig, "secretManager"> & {
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
       mnemonic: string[];
       password?: string;
-    },
+    }
   ): Promise<MeshWallet> {
     const bip32 = await InMemoryBip32.fromMnemonic(
       config.mnemonic,
-      config.password,
+      config.password
     );
     return MeshWallet.create({
-      secretManager: bip32,
+      addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: config.networkId,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
       walletAddressType: config.walletAddressType,
       fetcher: config.fetcher,
       submitter: config.submitter,
@@ -54,16 +53,14 @@ export class MeshWallet extends BaseCardanoWallet {
   }
 
   static async fromBip32Root(
-    config: Omit<BaseCardanoWalletConfig, "secretManager"> & {
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
       bech32: string;
-    },
+    }
   ): Promise<MeshWallet> {
     const bip32 = InMemoryBip32.fromBech32(config.bech32);
     return MeshWallet.create({
-      secretManager: bip32,
+      addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: config.networkId,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
       walletAddressType: config.walletAddressType,
       fetcher: config.fetcher,
       submitter: config.submitter,
@@ -71,16 +68,35 @@ export class MeshWallet extends BaseCardanoWallet {
   }
 
   static async fromBip32RootHex(
-    config: Omit<BaseCardanoWalletConfig, "secretManager"> & {
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
       hex: string;
-    },
+    }
   ): Promise<MeshWallet> {
     const bip32 = InMemoryBip32.fromKeyHex(config.hex);
     return MeshWallet.create({
-      secretManager: bip32,
+      addressSource: { type: "secretManager", secretManager: bip32 },
       networkId: config.networkId,
-      customStakeCredentialSource: config.customStakeCredentialSource,
-      customDrepCredentialSource: config.customDrepCredentialSource,
+      walletAddressType: config.walletAddressType,
+      fetcher: config.fetcher,
+      submitter: config.submitter,
+    });
+  }
+
+  static async fromCredentialSources(
+    config: Omit<BaseCardanoWalletConfig, "addressSource"> & {
+      paymentCredentialSource: CredentialSource;
+      stakeCredentialSource?: CredentialSource;
+      drepCredentialSource?: CredentialSource;
+    }
+  ): Promise<MeshWallet> {
+    return MeshWallet.create({
+      addressSource: {
+        type: "credentials",
+        paymentCredential: config.paymentCredentialSource,
+        stakeCredential: config.stakeCredentialSource,
+        drepCredential: config.drepCredentialSource,
+      },
+      networkId: config.networkId,
       walletAddressType: config.walletAddressType,
       fetcher: config.fetcher,
       submitter: config.submitter,
@@ -111,7 +127,7 @@ export class MeshWallet extends BaseCardanoWallet {
     };
     // sort utxos by lovelace value ascending
     const sortedUtxos = utxos.sort(
-      (a, b) => getUtxoLovelaceValue(a) - getUtxoLovelaceValue(b),
+      (a, b) => getUtxoLovelaceValue(a) - getUtxoLovelaceValue(b)
     );
 
     // return the smallest utxo with at least 5 ADA
@@ -161,14 +177,14 @@ export class MeshWallet extends BaseCardanoWallet {
 
   async signTxReturnFullTx(
     tx: string,
-    partialSign: boolean = false,
+    partialSign: boolean = false
   ): Promise<string> {
     const witnessCbor = await this.signTx(tx, partialSign);
     const addedWitnesses = Serialization.TransactionWitnessSet.fromCbor(
-      HexBlob(witnessCbor),
+      HexBlob(witnessCbor)
     );
     const transaction = Serialization.Transaction.fromCbor(
-      Serialization.TxCBOR(tx),
+      Serialization.TxCBOR(tx)
     );
     let witnessSet = transaction.witnessSet();
     let witnessSetVkeys = witnessSet.vkeys();
@@ -182,13 +198,13 @@ export class MeshWallet extends BaseCardanoWallet {
     witnessSet.setVkeys(
       Serialization.CborSet.fromCore(
         witnessSetVkeysValues.map((vkw) => vkw.toCore()),
-        Serialization.VkeyWitness.fromCore,
-      ),
+        Serialization.VkeyWitness.fromCore
+      )
     );
     const signedTx = new Serialization.Transaction(
       transaction.body(),
       witnessSet,
-      transaction.auxiliaryData(),
+      transaction.auxiliaryData()
     );
     return signedTx.toCbor();
   }

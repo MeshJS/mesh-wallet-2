@@ -25,12 +25,21 @@ export type CredentialSource =
     };
 
 export interface AddressManagerConfig {
-  secretManager: ISecretManager;
+  addressSource: AddressSource;
   networkId: number;
-  customPaymentCredentialSource?: CredentialSource;
-  customStakeCredentialSource?: CredentialSource;
-  customDrepCredentialSource?: CredentialSource;
 }
+
+export type AddressSource =
+  | {
+      type: "secretManager";
+      secretManager: ISecretManager;
+    }
+  | {
+      type: "credentials";
+      paymentCredential: CredentialSource;
+      stakeCredential?: CredentialSource;
+      drepCredential?: CredentialSource;
+    };
 
 export class AddressManager {
   private readonly paymentCredential: Credential;
@@ -41,29 +50,26 @@ export class AddressManager {
   private readonly stakeSigner?: ISigner;
   private readonly drepSigner?: ISigner;
 
-  readonly secretManager: ISecretManager;
   private readonly networkId: number;
 
   static async create(config: AddressManagerConfig): Promise<AddressManager> {
-    const secretManager = config.secretManager;
-
     let paymentSigner: ISigner;
     let paymentCredential: Credential;
 
-    if (config.customPaymentCredentialSource) {
-      if (config.customPaymentCredentialSource.type === "scriptHash") {
+    if (config.addressSource.type === "credentials") {
+      if (config.addressSource.paymentCredential.type === "scriptHash") {
         throw new Error(
-          "Payment credential cannot be a script hash. Payment credentials must be key hashes that can sign transactions.",
+          "Payment credential cannot be a script hash. Payment credentials must be key hashes that can sign transactions."
         );
       } else {
-        paymentSigner = config.customPaymentCredentialSource.signer;
+        paymentSigner = config.addressSource.paymentCredential.signer;
         paymentCredential = {
           type: CredentialType.KeyHash,
           hash: await paymentSigner.getPublicKeyHash(),
         };
       }
     } else {
-      paymentSigner = await secretManager.getSigner([
+      paymentSigner = await config.addressSource.secretManager.getSigner([
         ...DEFAULT_PAYMENT_KEY_DERIVATION_PATH,
         0,
       ]);
@@ -76,21 +82,24 @@ export class AddressManager {
     let stakeSigner: ISigner | undefined = undefined;
     let stakeCredential: Credential;
 
-    if (config.customStakeCredentialSource) {
-      if (config.customStakeCredentialSource.type === "scriptHash") {
+    if (
+      config.addressSource.type === "credentials" &&
+      config.addressSource.stakeCredential
+    ) {
+      if (config.addressSource.stakeCredential.type === "scriptHash") {
         stakeCredential = {
           type: CredentialType.ScriptHash,
-          hash: config.customStakeCredentialSource.scriptHash,
+          hash: config.addressSource.stakeCredential.scriptHash,
         };
       } else {
-        stakeSigner = config.customStakeCredentialSource.signer;
+        stakeSigner = config.addressSource.stakeCredential.signer;
         stakeCredential = {
           type: CredentialType.KeyHash,
           hash: await stakeSigner.getPublicKeyHash(),
         };
       }
-    } else {
-      stakeSigner = await secretManager.getSigner([
+    } else if (config.addressSource.type === "secretManager") {
+      stakeSigner = await config.addressSource.secretManager.getSigner([
         ...DEFAULT_STAKE_KEY_DERIVATION_PATH,
         0,
       ]);
@@ -103,21 +112,24 @@ export class AddressManager {
     let drepSigner: ISigner | undefined = undefined;
     let drepCredential: Credential;
 
-    if (config.customDrepCredentialSource) {
-      if (config.customDrepCredentialSource.type === "scriptHash") {
+    if (
+      config.addressSource.type === "credentials" &&
+      config.addressSource.drepCredential
+    ) {
+      if (config.addressSource.drepCredential.type === "scriptHash") {
         drepCredential = {
           type: CredentialType.ScriptHash,
-          hash: config.customDrepCredentialSource.scriptHash,
+          hash: config.addressSource.drepCredential.scriptHash,
         };
       } else {
-        drepSigner = config.customDrepCredentialSource.signer;
+        drepSigner = config.addressSource.drepCredential.signer;
         drepCredential = {
           type: CredentialType.KeyHash,
           hash: await drepSigner.getPublicKeyHash(),
         };
       }
-    } else {
-      drepSigner = await secretManager.getSigner([
+    } else if (config.addressSource.type === "secretManager") {
+      drepSigner = await config.addressSource.secretManager.getSigner([
         ...DEFAULT_DREP_KEY_DERIVATION_PATH,
         0,
       ]);
@@ -133,10 +145,9 @@ export class AddressManager {
       stakeCredential,
       drepCredential,
       paymentSigner,
-      secretManager,
       networkId,
       stakeSigner,
-      drepSigner,
+      drepSigner
     );
   }
 
@@ -145,10 +156,9 @@ export class AddressManager {
     stakeCredential: Credential,
     drepCredential: Credential,
     paymentSigner: ISigner,
-    secretManager: ISecretManager,
     networkId: number,
     stakeSigner?: ISigner,
-    drepSigner?: ISigner,
+    drepSigner?: ISigner
   ) {
     setInConwayEra(true);
     this.paymentCredential = paymentCredential;
@@ -158,7 +168,6 @@ export class AddressManager {
     this.stakeSigner = stakeSigner;
     this.drepSigner = drepSigner;
     this.networkId = networkId;
-    this.secretManager = secretManager;
   }
 
   async getNextAddress(addressType: AddressType): Promise<CardanoAddress> {
@@ -166,7 +175,7 @@ export class AddressManager {
       addressType,
       this.networkId,
       this.paymentCredential,
-      this.stakeCredential,
+      this.stakeCredential
     );
   }
 
@@ -175,7 +184,7 @@ export class AddressManager {
       addressType,
       this.networkId,
       this.paymentCredential,
-      this.stakeCredential,
+      this.stakeCredential
     );
   }
 
@@ -184,7 +193,7 @@ export class AddressManager {
       AddressType.Reward,
       this.networkId,
       this.paymentCredential,
-      this.stakeCredential,
+      this.stakeCredential
     );
   }
 
@@ -200,7 +209,7 @@ export class AddressManager {
   //}
 
   async getCredentialsSigners(
-    pubkeyHashes: Set<string>,
+    pubkeyHashes: Set<string>
   ): Promise<Map<string, ISigner>> {
     const signersMap = new Map<string, ISigner>();
 
@@ -212,6 +221,7 @@ export class AddressManager {
     }
 
     if (
+      this.stakeCredential &&
       this.stakeCredential.type === CredentialType.KeyHash &&
       pubkeyHashes.has(this.stakeCredential.hash) &&
       this.stakeSigner
@@ -220,6 +230,7 @@ export class AddressManager {
     }
 
     if (
+      this.drepCredential &&
       this.drepCredential.type === CredentialType.KeyHash &&
       pubkeyHashes.has(this.drepCredential.hash) &&
       this.drepSigner
